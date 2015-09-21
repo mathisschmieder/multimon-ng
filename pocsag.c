@@ -457,6 +457,10 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
 				  &&(s->l2.pocsag.address != 174760 )) {
                	    verbprintf(0, "%s [%6lu:%1hhi] ", timeb, s->l2.pocsag.address, s->l2.pocsag.function);
                		verbprintf(0, "%s", alpha_string);
+			#ifdef SQLITE
+      			if (dump_to_database == true)
+      			  store_message (s->l2.pocsag.address, s->l2.pocsag.function, alpha_string, s->dem_par->name);
+ 			#endif
                		if(!sync) verbprintf(2,"<LOST SYNC>");
                		verbprintf(0,"\n");
 				}

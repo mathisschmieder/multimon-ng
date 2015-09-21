@@ -100,6 +100,8 @@ extern int cw_threshold;
 extern bool cw_disable_auto_threshold;
 extern bool cw_disable_auto_timing;
 
+bool dump_to_database = false;
+
 void quit(void);
 
 /* ---------------------------------------------------------------------- */
@@ -541,6 +543,9 @@ static const char usage_str[] = "\n"
         "  -q         : Quiet\n"
         "  -v <level> : Level of verbosity (e.g. '-v 3')\n"
         "               For POCSAG and MORSE_CW '-v1' prints decoding statistics.\n"
+	#ifdef SQLITE
+	"  -D <file>  : Dump POCSAG messates to sqlite3 database\n"
+	#endif
         "  -h         : This help\n"
         "  -A         : APRS mode (TNC2 text output)\n"
         "  -m         : Mute SoX warnings\n"
@@ -575,7 +580,7 @@ int main(int argc, char *argv[])
     unsigned int overlap = 0;
     char *input_type = "hw";
 
-    while ((c = getopt(argc, argv, "t:a:s:v:b:f:g:d:o:cqhAmrxynipeu")) != EOF) {
+    while ((c = getopt(argc, argv, "t:a:s:v:b:f:g:d:o:D:cqhAmrxynipeu")) != EOF) {
         switch (c) {
         case 'h':
         case '?':
@@ -710,6 +715,20 @@ intypefound:
             if(i) cw_dit_length = abs(i);
             break;
         }
+
+#ifdef SQLITE
+	case 'D':
+	    if (strcmp (optarg, "") == 0)
+	    {
+		fprintf (stderr, "-D option but no database file specified\n");
+	    }
+	    else
+	    {
+	    	dump_to_database = true;
+ 	    	strcpy(pocsag_database, optarg);
+	    }
+	    break;
+#endif
             
         case 'g':
         {
@@ -756,6 +775,9 @@ intypefound:
     if (mask_first)
         memset(dem_mask, 0xff, sizeof(dem_mask));
     
+   if (dump_to_database)
+	fprintf(stdout, "Writing POCSAG messages to %s\n", pocsag_database); 
+
     if (!quietflg)
         fprintf(stdout, "Enabled demodulators:");
     for (i = 0; (unsigned int) i < NUMDEMOD; i++)

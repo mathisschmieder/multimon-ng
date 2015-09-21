@@ -314,6 +314,12 @@ extern const struct demod_param demod_scope;
 #define SCOPE_DEMOD
 #endif
 
+#ifdef SQLITE
+char pocsag_database[1024];
+extern bool dump_to_database;
+int store_message (int sql_address, int sql_function, char *sql_message, char *sql_baud);
+#endif
+
 #define ALL_DEMOD &demod_poc5, &demod_poc12, &demod_poc24, &demod_eas, &demod_ufsk1200, &demod_clipfsk, &demod_fmsfsk, \
     &demod_afsk1200, &demod_afsk2400, &demod_afsk2400_2, &demod_afsk2400_3, &demod_hapn4800, \
     &demod_fsk9600, &demod_dtmf, &demod_zvei1, &demod_zvei2, &demod_zvei3, &demod_dzvei, \

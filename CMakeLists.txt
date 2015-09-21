@@ -54,6 +54,10 @@ else( PULSE_AUDIO_SUPPORT )
 	add_definitions( "-DDUMMY_AUDIO" )
 endif( PULSE_AUDIO_SUPPORT )
 
+# Ugly. Search for it
+link_libraries ( "-lsqlite3" )
+add_definitions( "-DSQLITE" )
+
 if( NOT MSVC )
 	add_definitions( "-std=gnu99" )
 endif( NOT MSVC )
@@ -100,6 +104,7 @@ set( SOURCES ${SOURCES}
 	demod_eas.c
 	demod_morse.c
 	demod_dumpcsv.c
+	sqlite.c
 	)
 
 
