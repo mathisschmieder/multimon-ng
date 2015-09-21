@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
+#include <ctype.h>
 
 /* ---------------------------------------------------------------------- */
 
@@ -266,6 +268,14 @@ static unsigned int print_msg_numeric(struct l2_state_pocsag *rx, char* buff, un
     return guesstimate;
 }
 
+void remove_whitespaces(char* str) {
+  int i,x;
+  for(i=x=1; str[i]; ++i)
+    if(!isspace(str[i]) || (i>0 && !isspace(str[i-1])))
+      str[x++] = str[i];
+  str[x] = '\0';
+}
+
 static int print_msg_alpha(struct l2_state_pocsag *rx, char* buff, unsigned int size)
 {
     uint32_t data = 0;
@@ -318,8 +328,11 @@ static int print_msg_alpha(struct l2_state_pocsag *rx, char* buff, unsigned int 
     }
     *cp = '\0';
 
+    remove_whitespaces(buff);
+
     return guesstimate;
 }
+
 
 /* ---------------------------------------------------------------------- */
 
@@ -383,14 +396,23 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
     if(pocsag_prune_empty && (s->l2.pocsag.numnibbles == 0))
         return;
 
+    time_t timer;
+	char timeb[26];
+	struct tm* tm_info;
+
+	time(&timer);
+	tm_info = localtime(&timer);
+
+	strftime(timeb, 26, "%d.%m. %H:%M:%S", tm_info);
+
     if((s->l2.pocsag.address != -1) || (s->l2.pocsag.function != -1))
     {
         if(s->l2.pocsag.numnibbles == 0)
         {
-            verbprintf(0, "%s: Address: %7lu  Function: %1hhi ",s->dem_par->name,
-                       s->l2.pocsag.address, s->l2.pocsag.function);
-            if(!sync) verbprintf(2,"<LOST SYNC>");
-            verbprintf(0,"\n");
+           // verbprintf(0, "%s [%6lu:%1hhi] ", timeb,
+           //            s->l2.pocsag.address, s->l2.pocsag.function);
+           // if(!sync) verbprintf(2,"<LOST SYNC>");
+           // verbprintf(0,"\n");
         }
         else
         {
@@ -414,34 +436,33 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
             }
 
 
+			/*
             if((pocsag_mode == POCSAG_MODE_NUMERIC) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_num >= 20 || unsure)))
             {
                 if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
-                    verbprintf(0, "%s: Address: %7lu  Function: %1hhi  ",s->dem_par->name,
+                    verbprintf(0, "%s [%6lu:%1hhi] ", timeb,
                            s->l2.pocsag.address, s->l2.pocsag.function);
-                else
-                    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
-                if(pocsag_mode == POCSAG_MODE_AUTO)
-                    verbprintf(3, "Certainty: %5i  ", guess_num);
+                //else
+                //    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
+                //if(pocsag_mode == POCSAG_MODE_AUTO)
+                //    verbprintf(3, "Certainty: %5i  ", guess_num);
                 verbprintf(0, "Numeric: %s", num_string);
                 if(!sync) verbprintf(2,"<LOST SYNC>");
                 verbprintf(0,"\n");
             }
-
+			*/
             if((pocsag_mode == POCSAG_MODE_ALPHA) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_alpha >= 20 || unsure)))
             {
-                if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
-                    verbprintf(0, "%s: Address: %7lu  Function: %1hhi  ",s->dem_par->name,
-                           s->l2.pocsag.address, s->l2.pocsag.function);
-                else
-                    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
-                if(pocsag_mode == POCSAG_MODE_AUTO)
-                    verbprintf(3, "Certainty: %5i  ", guess_alpha);
-                verbprintf(0, "Alpha:   %s", alpha_string);
-                if(!sync) verbprintf(2,"<LOST SYNC>");
-                verbprintf(0,"\n");
+                if(((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
+				  &&(s->l2.pocsag.address != 174760 )) {
+               	    verbprintf(0, "%s [%6lu:%1hhi] ", timeb, s->l2.pocsag.address, s->l2.pocsag.function);
+               		verbprintf(0, "%s", alpha_string);
+               		if(!sync) verbprintf(2,"<LOST SYNC>");
+               		verbprintf(0,"\n");
+				}
             }
-
+			
+			/*
             if((pocsag_mode == POCSAG_MODE_SKYPER) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_skyper >= 20 || unsure)))
             {
                 if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
@@ -455,6 +476,7 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
                 if(!sync) verbprintf(2,"<LOST SYNC>");
                 verbprintf(0,"\n");
             }
+			*/
         }
     }
 }
