@@ -35,11 +35,13 @@
 #include <stdbool.h>
 #include <time.h>
 #include <ctype.h>
+#include <curl/curl.h>
 
 /* ---------------------------------------------------------------------- */
 
 //#define CHARSET_LATIN1
 //#define CHARSET_UTF8 //ÄÖÜäöüß
+#define COUNTOF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 
 /* ---------------------------------------------------------------------- */
 
@@ -66,8 +68,19 @@ int pocsag_show_partial_decodes = 0;
 int pocsag_heuristic_pruning = 0;
 int pocsag_prune_empty = 0;
 
+// Define RICs that trigger notification
+int32_t ric[] = {548001, 552057, 548017, 544585, 547561, 548945, 544017, 544025, 547513, 548073};
+unsigned long messages[10];
+int nmessages = 0;
+
 /* ---------------------------------------------------------------------- */
 
+// Pusover variables
+#define PO_PRIORITY 1
+char* po_token = "APP TOKEN HERE";
+char* po_user = "USER TOKEN HERE";
+
+/* ---------------------------------------------------------------------- */
 
 enum states{
     NO_SYNC = 0,            //0b00000000
@@ -89,6 +102,55 @@ static inline unsigned char even_parity(uint32_t data)
     temp = temp ^ (temp >> 2);
     temp = temp ^ (temp >> 1);
     return temp & 1;
+}
+
+unsigned long hash(const char *str)
+{
+    unsigned long hash = 5381;
+    int c;
+
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+    return hash;
+}
+
+size_t callbackFunction(char *ptr, size_t size, size_t nmemb, void *userdata)
+{
+    return size * nmemb;
+}
+
+int notify(int ric, const char *alpha_string)
+{
+  CURL *curl;
+  CURLcode res;
+
+  curl_global_init(CURL_GLOBAL_DEFAULT);
+
+  curl = curl_easy_init();
+  if(curl) {
+    curl_easy_setopt(curl, CURLOPT_URL, "https://api.pushover.net/1/messages.json");
+    char* message = curl_easy_escape(curl, alpha_string, 0);
+    char* post = (char*) malloc(512*sizeof(char));
+    sprintf(post, "token=%s&user=%s&priority=%d&title=%d&message=%s", po_token, po_user, PO_PRIORITY, ric, message);
+    curl_free(message);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callbackFunction);
+
+    /* Perform the request, res will get the return code */
+    res = curl_easy_perform(curl);
+    /* Check for errors */
+    if(res != CURLE_OK)
+      fprintf(stderr, "curl_easy_perform() failed: %s\n",
+              curl_easy_strerror(res));
+
+    /* always cleanup */
+    curl_easy_cleanup(curl);
+    free(post);
+  }
+
+  curl_global_cleanup();
+  return 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -407,14 +469,7 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
 
     if((s->l2.pocsag.address != -1) || (s->l2.pocsag.function != -1))
     {
-        if(s->l2.pocsag.numnibbles == 0)
-        {
-           // verbprintf(0, "%s [%6lu:%1hhi] ", timeb,
-           //            s->l2.pocsag.address, s->l2.pocsag.function);
-           // if(!sync) verbprintf(2,"<LOST SYNC>");
-           // verbprintf(0,"\n");
-        }
-        else
+        if(s->l2.pocsag.numnibbles != 0)
         {
             char num_string[1024];
             char alpha_string[1024];
@@ -435,56 +490,39 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
                 unsure = 1;
             }
 
-
-			/*
-            if((pocsag_mode == POCSAG_MODE_NUMERIC) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_num >= 20 || unsure)))
-            {
-                if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
-                    verbprintf(0, "%s [%6lu:%1hhi] ", timeb,
-                           s->l2.pocsag.address, s->l2.pocsag.function);
-                //else
-                //    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
-                //if(pocsag_mode == POCSAG_MODE_AUTO)
-                //    verbprintf(3, "Certainty: %5i  ", guess_num);
-                verbprintf(0, "Numeric: %s", num_string);
-                if(!sync) verbprintf(2,"<LOST SYNC>");
-                verbprintf(0,"\n");
-            }
-			*/
             if((pocsag_mode == POCSAG_MODE_ALPHA) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_alpha >= 20 || unsure)))
             {
                 if(((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
 				  &&(s->l2.pocsag.address != 174760 )) {
                	    verbprintf(0, "%s [%6lu:%1hhi] ", timeb, s->l2.pocsag.address, s->l2.pocsag.function);
-               		verbprintf(0, "%s", alpha_string);
-			#ifdef SQLITE
-      			if (dump_to_database == true)
-      			  store_message (s->l2.pocsag.address, s->l2.pocsag.function, alpha_string, s->dem_par->name);
- 			#endif
-               		if(!sync) verbprintf(2,"<LOST SYNC>");
-               		verbprintf(0,"\n");
+               	    verbprintf(0, "%s", alpha_string);
+               	    if(!sync) verbprintf(2,"<LOST SYNC>");
+	       	    #ifdef SQLITE
+      	       	    if (dump_to_database == true)
+      	       	      store_message (s->l2.pocsag.address, s->l2.pocsag.function, alpha_string);
+ 	       	    #endif
+		    // Compare with wanted RICs and notify
+		    for (int i=0; i < COUNTOF(ric); i++) { 
+			if (s->l2.pocsag.address == ric[i]) {
+				verbprintf(0, "(wanted)");
+				int duplicate = 0;
+				for (int j=0; j < COUNTOF(messages); j++) {
+					if ( messages[j] == hash(alpha_string) )
+						duplicate = 1;
 				}
+				nmessages++;
+				nmessages = nmessages % 9;
+				messages[nmessages] = hash(alpha_string);
+				if ( duplicate == 0 )
+		   			notify(s->l2.pocsag.address, alpha_string);	
+				}
+			} 
+               	    verbprintf(0,"\n");
+		}
             }
-			
-			/*
-            if((pocsag_mode == POCSAG_MODE_SKYPER) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_skyper >= 20 || unsure)))
-            {
-                if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
-                    verbprintf(0, "%s: Address: %7lu  Function: %1hhi  ",s->dem_par->name,
-                           s->l2.pocsag.address, s->l2.pocsag.function);
-                else
-                    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
-                if(pocsag_mode == POCSAG_MODE_AUTO)
-                    verbprintf(3, "Certainty: %5i  ", guess_skyper);
-                verbprintf(0, "Skyper:  %s", skyper_string);
-                if(!sync) verbprintf(2,"<LOST SYNC>");
-                verbprintf(0,"\n");
-            }
-			*/
         }
     }
 }
-
 /* ---------------------------------------------------------------------- */
 
 void pocsag_init(struct demod_state *s)
@@ -935,3 +973,4 @@ void pocsag_rxbit(struct demod_state *s, int32_t bit)
 }
 
 /* ---------------------------------------------------------------------- */
+

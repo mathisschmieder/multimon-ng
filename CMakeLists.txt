@@ -55,7 +55,7 @@ else( PULSE_AUDIO_SUPPORT )
 endif( PULSE_AUDIO_SUPPORT )
 
 # Ugly. Search for it
-link_libraries ( "-lsqlite3" )
+link_libraries ( "-lsqlite3 -lcurl" )
 add_definitions( "-DSQLITE" )
 
 if( NOT MSVC )

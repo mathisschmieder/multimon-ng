@@ -7,7 +7,7 @@
 
 //TODO Error handling
 
-int store_message (int sql_address, int sql_function, char *sql_message, char *sql_baud)
+int store_message (int sql_address, int sql_function, char *sql_message)
 {
 	int error = 0;
 	int timestamp;
@@ -41,7 +41,6 @@ int store_message (int sql_address, int sql_function, char *sql_message, char *s
 	error = sqlite3_bind_int (insert_stmt, 1, sql_address);
 	error = sqlite3_bind_int (insert_stmt, 2, sql_function);
 	error = sqlite3_bind_text (insert_stmt, 3, sql_message, strlen(sql_message), NULL);
-	error = sqlite3_bind_text (insert_stmt, 4, sql_baud, strlen(sql_baud), NULL);
 	error = sqlite3_bind_int64 (insert_stmt, 5, timestamp);
 	//Store
 	error = sqlite3_step (insert_stmt);
